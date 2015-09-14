@@ -16,8 +16,8 @@
 #define PWD "PWD\n"
 #define CWD "CWD "
 #define LIST "LIST\n"
-#define RETR "RETR\n"
-#define STOR "STOR\n"
+#define RETRIEVE "RETR "
+#define STORE "STOR\n"
 #define QUIT "QUIT\n"
 #define EPSV "EPSV\n"
 
@@ -29,6 +29,7 @@ void signIn(int sock);
 void listDirectory(int sock);
 void printWorkingDirectory(int sock);
 void changeWorkingDirectory(int sock);
+void retrieveFile(int sock);
 void ftpQuit(int sock);
 void makeDecision(int *sock, char *userChoice); 
 int enterEpsvMode(int sock);
@@ -65,7 +66,7 @@ void makeDecision(int *sock, char* userChoice)
     // Validify the user input
     if (userChoiceInt < 1 || userChoiceInt > 7)
     {
-        printf("Please key in a valid decision\n");
+        printf("\nPlease key in a valid decision\n");
 
     }
     else if(*sock == 0 && userChoiceInt != 1)
@@ -89,6 +90,9 @@ void makeDecision(int *sock, char* userChoice)
             break;
         case 4:
             listDirectory(*sock); 
+            break;
+        case 6:
+            retrieveFile(*sock);
             break;
         case 7:
             ftpQuit(*sock);
@@ -231,7 +235,7 @@ void changeWorkingDirectory(int sock)
     char userInput[SIZE] = CWD;
     char buffer[512];
 
-    printf("Which directory do you want to change to?\n");
+    printf("Which directory do you want to change to? : ");
     fgets(buffer, SIZE, stdin);
     
     strcat(userInput, buffer);
@@ -264,6 +268,37 @@ void listDirectory(int sock)
         myRecvData(sock); // transfer complete message
         //printf("children died, parent revived");
     }
+}
+
+void retrieveFile(int sock)
+{
+    //TODO could overflow, what if more tha 512
+    char recv_data[SIZE]; 
+    char userInput[SIZE] = RETRIEVE;
+    char buffer[512];
+
+    printf("Which file do you want to download? : ");
+    fgets(buffer, SIZE, stdin);
+    
+    strcat(userInput, buffer);
+
+    int portIssued = enterEpsvMode(sock);
+    mySend(sock, userInput);
+    
+    int processId = fork();
+
+    if(processId == 0)
+    {
+        connectFtpServer(portIssued);
+        exit(0);
+    }
+    else
+    {
+        myRecvData(sock);
+        wait();
+        myRecvData(sock);
+    }
+    
 }
 
 int enterEpsvMode(int sock)

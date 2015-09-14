@@ -11,14 +11,15 @@
 #include <fcntl.h>
 
 #define SIZE 1024
+#define FTP_PORT 21
+
 #define PWD "PWD\n"
-#define CWD "CWD\n"
+#define CWD "CWD "
 #define LIST "LIST\n"
 #define RETR "RETR\n"
 #define STOR "STOR\n"
 #define QUIT "QUIT\n"
 #define EPSV "EPSV\n"
-#define FTP_PORT 21
 
 void printMenu();
 void mySend(int sock, char data[SIZE]);
@@ -27,16 +28,17 @@ void myRecvData(int sock);
 void signIn(int sock);
 void listDirectory(int sock);
 void printWorkingDirectory(int sock);
+void changeWorkingDirectory(int sock);
 void ftpQuit(int sock);
-
+void makeDecision(int *sock, char *userChoice); 
 int enterEpsvMode(int sock);
 int connectFtpServer(int port);
 
 int main()
 
 {
-    int sock;
-    char send_data[SIZE];
+    int sock = 0;
+    char userInput[SIZE];
 
     while(1)
     {
@@ -44,29 +46,56 @@ int main()
         printMenu();
 
         // get user command
-        fgets((send_data), sizeof(send_data), stdin);
+        fgets((userInput), sizeof(userInput), stdin);
 
-        //remove newline character and replace with \0
-        send_data[strlen(send_data) - 1] = '\0';
-        
-        if (strcmp(send_data, "1") == 0){
-            sock = connectFtpServer(FTP_PORT);
-            signIn(sock);
-        }
+        makeDecision(&sock, userInput);
 
-        else if (strcmp(send_data, "2") == 0){
-            printWorkingDirectory(sock); 
-        }
+    }
 
-        else if (strcmp(send_data, "4") == 0){
-            listDirectory(sock); 
-        }
-
-        else if (strcmp(send_data, "7") == 0){
-            ftpQuit(sock);
-        }
-    }   
     return 0;
+}
+
+void makeDecision(int *sock, char* userChoice)
+{
+    //process userChoice to a number
+    //remove newline character and replace with \0
+    userChoice[strlen(userChoice) - 1] = '\0';
+    int userChoiceInt = atoi(userChoice);
+    
+    // Validify the user input
+    if (userChoiceInt < 1 || userChoiceInt > 7)
+    {
+        printf("Please key in a valid decision\n");
+
+    }
+    else if(*sock == 0 && userChoiceInt != 1)
+    {
+        printf("Please connect to a FTP server(choice 1) first\n");
+        return;
+    } 
+    
+    // Demultiplex decisions
+    switch(userChoiceInt)
+    {
+        case 1:
+            *sock = connectFtpServer(FTP_PORT);
+            signIn(*sock);
+            break;
+        case 2:
+            printWorkingDirectory(*sock); 
+            break;
+        case 3:
+            changeWorkingDirectory(*sock);
+            break;
+        case 4:
+            listDirectory(*sock); 
+            break;
+        case 7:
+            ftpQuit(*sock);
+            break;
+
+    }
+
 }
 
 void mySend(int sock, char data[SIZE])
@@ -115,13 +144,13 @@ void myRecvData(int sock)
     }
 
     /* make socket blocking
-    int opts = fcntl(sock, F_GETFL);
-    opts = opts & (~O_NONBLOCK);
-    
-    if (fcntl(sock,F_SETFL,opts) < 0) {
-        perror("fcntl(F_SETFL)");
-        exit(EXIT_FAILURE);
-    }*/
+       int opts = fcntl(sock, F_GETFL);
+       opts = opts & (~O_NONBLOCK);
+
+       if (fcntl(sock,F_SETFL,opts) < 0) {
+       perror("fcntl(F_SETFL)");
+       exit(EXIT_FAILURE);
+       }*/
 }
 
 // This functions connnect to a FTP server
@@ -195,6 +224,23 @@ void printWorkingDirectory(int sock)
     myRecv(sock, recv_data);
 }
 
+void changeWorkingDirectory(int sock)
+{
+    //TODO could overflow, what if more tha 512
+    char recv_data[SIZE]; 
+    char userInput[SIZE] = CWD;
+    char buffer[512];
+
+    printf("Which directory do you want to change to?\n");
+    fgets(buffer, SIZE, stdin);
+    
+    strcat(userInput, buffer);
+    printf("%s", userInput);
+    mySend(sock, userInput);
+    myRecv(sock, recv_data);
+    
+}
+
 void listDirectory(int sock)
 {
     int port_issued = enterEpsvMode(sock); 
@@ -234,7 +280,6 @@ int enterEpsvMode(int sock)
     memcpy(port, &ret[3], 5);
     port[6] = '\0';
     int port_int = atoi(port);
-    printf("the port is %d\n", port_int);
 
     return port_int;
 }

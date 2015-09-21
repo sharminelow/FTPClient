@@ -26,10 +26,10 @@
 void printMenu();
 void mySend(int sock, char data[SIZE]);
 void myRecv(int sock, char recv_data[SIZE]);
-void totalRecv(int sock);
+void totalRecv(int sock, int isWrite, FILE *fp);
 void signIn(int sock);
 void listDirectory(int sock);
-void printWorkingDirectory(int sock);
+void printWorkingDirectory(int sock);      
 void changeWorkingDirectory(int sock);
 void retrieveFile(int sock);
 void ftpQuit(int sock);
@@ -59,7 +59,7 @@ int main()
     return 0;
 }
 
-void makeDecision(int *sock, char* userChoice)
+void makeDecision(int *sock, char *userChoice)
 {
     //process userChoice to a number
     //remove newline character and replace with \0
@@ -128,8 +128,8 @@ void myRecv(int sock, char recv_data[SIZE])
     fflush(stdout);
 }
 
-// totalRecv will print the data
-void totalRecv(int sock)
+// totalRecv will print/write the data
+void totalRecv(int sock, int isWrite, FILE *fp)
 {
     int numBytes;
     char buffer[SIZE];
@@ -148,13 +148,21 @@ void totalRecv(int sock)
     {
         numBytes = recv(sock, buffer, SIZE-1, 0);
         printf("RECEIVED NUMBER OF BYTES: %d ", numBytes);
-        printf("%s", buffer);
-        fflush(stdout);
-        memset(buffer, 0, SIZE);
         if (numBytes <= 0) // if no more data
         {
             break;
         }
+        if (isWrite == 1)
+        {
+            // write to file
+            fwrite(buffer, 1, sizeof(buffer), fp);
+        }
+        else
+        {
+            printf("%s", buffer);
+            fflush(stdout);
+        }
+        memset(buffer, 0, SIZE);
     }
 
 }
@@ -194,9 +202,6 @@ int connectFtpServer(int port)
             inet_ntoa(server_addr.sin_addr),ntohs(server_addr.sin_port));
     fflush(stdout);
 
-    //myRecv(sock, recv_data); //to receive success message from server
-    totalRecv(sock);
-
     return sock;
 }
 
@@ -206,7 +211,9 @@ void signIn(int sock)
     char password[512] = "PASS ";
     char buffer[512] = "";
     char recv_data[SIZE] = "";
-    printf("starting to connect to FTP server\n");
+    
+    myRecv(sock, recv_data); //to receive connection success message
+    printf("starting connection to FTP server\n");
 
     memset(buffer, 0, 512);
     printf("Enter your user: ");
@@ -249,6 +256,7 @@ void changeWorkingDirectory(int sock)
 
 void listDirectory(int sock)
 {
+    char recv_data[SIZE];
     int port_issued = enterEpsvMode(sock); 
 
     mySend(sock, LIST);
@@ -261,15 +269,17 @@ void listDirectory(int sock)
         // close the main connection socket
         close(sock);
         connectFtpServer(port_issued);    
+        //receive print but not write
+        totalRecv(sock, 0, NULL);
         exit(0);
     }
 
     // Let parent sleep, else will flood terminal
     else 
     {
-        totalRecv(sock); // 150 ascii message
+        myRecv(sock, recv_data); // 150 ascii message
         wait();
-        totalRecv(sock); // transfer complete message
+        myRecv(sock, recv_data); // transfer complete message
         //printf("children died, parent revived");
     }
 }
@@ -296,6 +306,8 @@ void retrieveFile(int sock)
         // close the main connection socket
         close(sock);
         connectFtpServer(portIssued);
+        FILE *fp = fopen("file.txt", "w");
+        totalRecv(sock, 1, fp); // to write full data to file
         exit(0);
     }
     else
@@ -304,7 +316,7 @@ void retrieveFile(int sock)
         if (strstr(recv_data, "150"))
         {
             wait();
-            myRecv(sock, recv_data); // receive 226 transfer complete  msg
+            myRecv(sock, recv_data); // receive 226 transfer complete msg
         }
         else {
             // kill children process

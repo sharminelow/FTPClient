@@ -1,5 +1,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -25,7 +26,7 @@
 void printMenu();
 void mySend(int sock, char data[SIZE]);
 void myRecv(int sock, char recv_data[SIZE]);
-void myRecvData(int sock);
+void totalRecv(int sock);
 void signIn(int sock);
 void listDirectory(int sock);
 void printWorkingDirectory(int sock);
@@ -35,6 +36,7 @@ void ftpQuit(int sock);
 void makeDecision(int *sock, char *userChoice); 
 int enterEpsvMode(int sock);
 int connectFtpServer(int port);
+
 
 int main()
 
@@ -109,6 +111,7 @@ void mySend(int sock, char data[SIZE])
 
 }
 
+// this does 1 receive call, print data
 void myRecv(int sock, char recv_data[SIZE])
 {
     int numBytes;
@@ -125,37 +128,35 @@ void myRecv(int sock, char recv_data[SIZE])
     fflush(stdout);
 }
 
-void myRecvData(int sock)
+// totalRecv will print the data
+void totalRecv(int sock)
 {
     int numBytes;
     char buffer[SIZE];
 
-    /* Error checking
-    //make socket non blocking
-    fcntl(sock, F_SETFL, O_NONBLOCK);    
-    */
+    // declare timeout constants
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec  = 900000; //0.9 seconds
+
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+    {
+        perror("error in sockopt");
+    }
 
     while (1)
     {
         numBytes = recv(sock, buffer, SIZE-1, 0);
-        //printf("RECEIVED NUMBER OF BYTES: %d ", numBytes);
+        printf("RECEIVED NUMBER OF BYTES: %d ", numBytes);
         printf("%s", buffer);
         fflush(stdout);
         memset(buffer, 0, SIZE);
-        if (numBytes <= 512) // TODO 512 assumes that it is the last packet
+        if (numBytes <= 0) // if no more data
         {
             break;
         }
     }
 
-    /* make socket blocking
-       int opts = fcntl(sock, F_GETFL);
-       opts = opts & (~O_NONBLOCK);
-
-       if (fcntl(sock,F_SETFL,opts) < 0) {
-       perror("fcntl(F_SETFL)");
-       exit(EXIT_FAILURE);
-       }*/
 }
 
 // This functions connnect to a FTP server
@@ -194,7 +195,7 @@ int connectFtpServer(int port)
     fflush(stdout);
 
     //myRecv(sock, recv_data); //to receive success message from server
-    myRecvData(sock);
+    totalRecv(sock);
 
     return sock;
 }
@@ -266,9 +267,9 @@ void listDirectory(int sock)
     // Let parent sleep, else will flood terminal
     else 
     {
-        myRecvData(sock); // 150 ascii message
+        totalRecv(sock); // 150 ascii message
         wait();
-        myRecvData(sock); // transfer complete message
+        totalRecv(sock); // transfer complete message
         //printf("children died, parent revived");
     }
 }

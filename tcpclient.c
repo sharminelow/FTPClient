@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #define SIZE 1024
 #define FTP_PORT 21
@@ -64,7 +65,7 @@ void makeDecision(int *sock, char* userChoice)
     int userChoiceInt = atoi(userChoice);
     
     // Validify the user input
-    if (userChoiceInt < 1 || userChoiceInt > 7)
+    if (userChoiceInt < 1 || userChoiceInt > 7 || strlen(userChoice) > 1)
     {
         printf("\nPlease key in a valid decision\n");
 
@@ -256,6 +257,8 @@ void listDirectory(int sock)
     // if childprocess, connect to new port
     if (processId == 0)
     {
+        // close the main connection socket
+        close(sock);
         connectFtpServer(port_issued);    
         exit(0);
     }
@@ -289,14 +292,23 @@ void retrieveFile(int sock)
 
     if(processId == 0)
     {
+        // close the main connection socket
+        close(sock);
         connectFtpServer(portIssued);
         exit(0);
     }
     else
     {
-        myRecvData(sock);
-        wait();
-        myRecvData(sock);
+        myRecv(sock, recv_data); // receive 150 msg
+        if (strstr(recv_data, "150"))
+        {
+            wait();
+            myRecv(sock, recv_data); // receive 226 transfer complete  msg
+        }
+        else {
+            // kill children process
+            kill(processId, SIGKILL);
+        } 
     }
     
 }
@@ -307,7 +319,7 @@ int enterEpsvMode(int sock)
     char recv_data[SIZE] = "";
 
     mySend(sock, ftpType);
-    myRecv(sock, recv_data);
+    myRecv(sock, recv_data); // 229 message
 
     //Retrieve port number
     char *ret = strstr(recv_data, "|");
@@ -321,8 +333,17 @@ int enterEpsvMode(int sock)
 
 void printMenu()
 {
-
-    printf("\nWhat do you feel like doing today?\n1.Connect to FTP server\n2.Print Working Directory\n3.Change Working Directory\n4.List all files\n5.Upload File\n6.Download File\n7.Quit\n");
+    printf("\n*******************************************\n");
+    printf("**************Mini-FTP client**************\n");
+    printf("*******************************************\n");
+    printf("What do you feel like doing today?\n");
+    printf("1.Connect to FTP server\n");
+    printf("2.Print Working Directory\n");
+    printf("3.Change Working Directory\n");
+    printf("4.List all files\n");
+    printf("5.Upload File\n");
+    printf("6.Download File\n");
+    printf("7.Quit\n");
     printf("Enter Optiooooooooooooooooon : ");
 
 }

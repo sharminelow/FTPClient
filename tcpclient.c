@@ -153,7 +153,9 @@ void totalRecv(int sock, int isWrite, FILE *fp)
     while (1)
     {
         numBytes = recv(sock, buffer, SIZE-1, 0);
-        printf("RECEIVED NUMBER OF BYTES: %d \n", numBytes);
+        //printf("RECEIVED NUMBER OF BYTES: %d \n", numBytes);
+        fflush(stdout);
+        
         if (numBytes <= 0) // if no more data
         {
             break;
@@ -165,6 +167,7 @@ void totalRecv(int sock, int isWrite, FILE *fp)
         }
         else
         {
+            // print to screen instead of writing to file
             printf("%s", buffer);
             fflush(stdout);
         }
@@ -201,11 +204,12 @@ void totalSend(int sock, FILE *fp)
             break;
         }
         
-        printf("%s", buffer);
-        fflush(stdout);
+        // Uncomment for debugging
+        // printf("%s", buffer);
+        // fflush(stdout);
 
         numBytesSend = send(sock, buffer, sizeof(buffer), 0);
-        printf("SEND NUMBER OF BYTES: %d \n", numBytesSend);
+        // printf("SEND NUMBER OF BYTES: %d \n", numBytesSend);
         if (numBytesSend <= 0) // if no more data to be sent
         {
             break;
@@ -245,7 +249,7 @@ int connectFtpServer(int port)
         exit(1);
     }
 
-    printf("\nI am connected to (%s , %d)\n",
+    printf("\nCurrently connected to (%s , %d)\n",
             inet_ntoa(server_addr.sin_addr),ntohs(server_addr.sin_port));
     fflush(stdout);
 
@@ -346,8 +350,6 @@ void uploadFile(int sock)
     fgets(filename, SIZE, stdin);
 
     strcat(userInput, filename); // put testfile.txt
-    printf("%s\n", userInput);
-    fflush(stdout);
 
     // replace filename last char with \0
     filename[strlen(filename) - 1] = '\0';
@@ -398,6 +400,7 @@ void retrieveFile(int sock)
     char filename[512];
 
     printf("Which file do you want to download? : ");
+    fflush(stdout);
     fgets(filename, SIZE, stdin);
     
     strcat(userInput, filename);

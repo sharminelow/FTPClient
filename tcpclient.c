@@ -337,6 +337,7 @@ void listDirectory(int sock)
 
 void uploadFile(int sock)
 {
+    char recv_data[SIZE] = "";
     char userInput[SIZE] = STORE;
     char filename[512] = "";
 
@@ -353,10 +354,37 @@ void uploadFile(int sock)
 
     // check if file exists locally TODO
 
-    // open file to read from
-    FILE *fp = fopen(filename, "r");
-    totalSend(sock, fp);
-    fclose(fp);
+    // enter epsv
+    int portIssued = enterEpsvMode(sock);
+    oneSend(sock, userInput);
+    
+    int processId = fork();
+
+    if(processId == 0)
+    {
+        // close the main connection socket
+        close(sock);
+        connectFtpServer(portIssued);
+
+        // open file to read from
+        FILE *fp = fopen(filename, "r");
+        totalSend(sock, fp);
+        fclose(fp);
+        exit(0);
+    }
+    else
+    {
+        oneRecv(sock, recv_data); // 150 msg - okay to send data
+        if (strstr(recv_data, "150"))
+        {
+            wait();
+            oneRecv(sock, recv_data); // 226 msg - transfer complete
+        }
+        else {
+            // kill children process
+            kill(processId, SIGKILL);
+        } 
+    }
 
     printf("End of uploading file\n");
     fflush(stdout);

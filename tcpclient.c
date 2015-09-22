@@ -23,10 +23,11 @@
 #define QUIT "QUIT\n"
 #define EPSV "EPSV\n"
 
-void printMenu();
-void mySend(int sock, char data[SIZE]);
-void myRecv(int sock, char recv_data[SIZE]);
+void oneSend(int sock, char data[SIZE]);
+void oneRecv(int sock, char recv_data[SIZE]);
 void totalRecv(int sock, int isWrite, FILE *fp);
+
+void printMenu();
 void signIn(int sock);
 void listDirectory(int sock);
 void printWorkingDirectory(int sock);      
@@ -105,14 +106,15 @@ void makeDecision(int *sock, char *userChoice)
 
 }
 
-void mySend(int sock, char data[SIZE])
+// this does 1 send call
+void oneSend(int sock, char data[SIZE])
 {
     send(sock, data, strlen(data),0);
 
 }
 
 // this does 1 receive call, print data
-void myRecv(int sock, char recv_data[SIZE])
+void oneRecv(int sock, char recv_data[SIZE])
 {
     int numBytes;
 
@@ -128,11 +130,11 @@ void myRecv(int sock, char recv_data[SIZE])
     fflush(stdout);
 }
 
-// totalRecv will print/write the data
+// totalRecv will print/write all data till EOF
 void totalRecv(int sock, int isWrite, FILE *fp)
 {
     int numBytes;
-    char buffer[SIZE];
+    char buffer[SIZE] = "";
 
     // declare timeout constants
     struct timeval timeout;
@@ -141,13 +143,13 @@ void totalRecv(int sock, int isWrite, FILE *fp)
 
     if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
     {
-        perror("error in sockopt");
+        perror("error in sockopt\n");
     }
 
     while (1)
     {
         numBytes = recv(sock, buffer, SIZE-1, 0);
-        printf("RECEIVED NUMBER OF BYTES: %d ", numBytes);
+        printf("RECEIVED NUMBER OF BYTES: %d \n", numBytes);
         if (numBytes <= 0) // if no more data
         {
             break;
@@ -162,6 +164,7 @@ void totalRecv(int sock, int isWrite, FILE *fp)
             printf("%s", buffer);
             fflush(stdout);
         }
+
         memset(buffer, 0, SIZE);
     }
 
@@ -176,7 +179,6 @@ int connectFtpServer(int port)
     struct hostent *host;
     struct sockaddr_in server_addr;  
 
-    //host = gethostbyname("127.0.0.1");
     host = gethostbyname("ftp.ietf.org");
 
     //create a Socket structure   - "Client Socket"
@@ -186,7 +188,6 @@ int connectFtpServer(int port)
     }
 
     server_addr.sin_family = AF_INET;     
-    //server_addr.sin_port = htons(5000);   
     server_addr.sin_port = htons(port);   
     server_addr.sin_addr = *((struct in_addr *)host->h_addr);
     bzero(&(server_addr.sin_zero),8); 
@@ -212,29 +213,29 @@ void signIn(int sock)
     char buffer[512] = "";
     char recv_data[SIZE] = "";
     
-    myRecv(sock, recv_data); //to receive connection success message
+    oneRecv(sock, recv_data); //to receive connection success message
     printf("starting connection to FTP server\n");
 
     memset(buffer, 0, 512);
     printf("Enter your user: ");
     fgets(buffer, 512, stdin);
     strcat(username, buffer);
-    mySend(sock, username);
-    myRecv(sock, recv_data);
+    oneSend(sock, username);
+    oneRecv(sock, recv_data);
 
     memset(buffer, 0, 512);
     printf("Enter your password: ");
     fgets(buffer, 512, stdin);
     strcat(password, buffer);
-    mySend(sock, password);
-    myRecv(sock, recv_data);
+    oneSend(sock, password);
+    oneRecv(sock, recv_data);
 }
 
 void printWorkingDirectory(int sock)
 {
     char recv_data[SIZE];
-    mySend(sock, PWD);
-    myRecv(sock, recv_data);
+    oneSend(sock, PWD);
+    oneRecv(sock, recv_data);
 }
 
 void changeWorkingDirectory(int sock)
@@ -249,8 +250,8 @@ void changeWorkingDirectory(int sock)
     
     strcat(userInput, buffer);
     printf("%s", userInput);
-    mySend(sock, userInput);
-    myRecv(sock, recv_data);
+    oneSend(sock, userInput);
+    oneRecv(sock, recv_data);
     
 }
 
@@ -259,7 +260,7 @@ void listDirectory(int sock)
     char recv_data[SIZE];
     int port_issued = enterEpsvMode(sock); 
 
-    mySend(sock, LIST);
+    oneSend(sock, LIST);
 
     int processId = fork();
 
@@ -268,19 +269,22 @@ void listDirectory(int sock)
     {
         // close the main connection socket
         close(sock);
-        connectFtpServer(port_issued);    
-        //receive print but not write
-        totalRecv(sock, 0, NULL);
+        int connectionSocket = connectFtpServer(port_issued);    
+        
+        //receive and print output
+        totalRecv(connectionSocket, 0, NULL);
+
+        // close socket and terminate process
+        close(connectionSocket);
         exit(0);
     }
 
-    // Let parent sleep, else will flood terminal
     else 
     {
-        myRecv(sock, recv_data); // 150 ascii message
+        oneRecv(sock, recv_data); // 150 ascii message
         wait();
-        myRecv(sock, recv_data); // transfer complete message
-        //printf("children died, parent revived");
+        totalRecv(sock, 0, NULL); // transfer complete message
+
     }
 }
 
@@ -289,15 +293,17 @@ void retrieveFile(int sock)
     //TODO could overflow, what if more tha 512
     char recv_data[SIZE]; 
     char userInput[SIZE] = RETRIEVE;
-    char buffer[512];
+    char filename[512];
 
     printf("Which file do you want to download? : ");
-    fgets(buffer, SIZE, stdin);
+    fgets(filename, SIZE, stdin);
     
-    strcat(userInput, buffer);
-
+    strcat(userInput, filename);
+    // replace filename last char with \0
+    filename[strlen(filename) - 1] = '\0';
+    
     int portIssued = enterEpsvMode(sock);
-    mySend(sock, userInput);
+    oneSend(sock, userInput);
     
     int processId = fork();
 
@@ -306,17 +312,18 @@ void retrieveFile(int sock)
         // close the main connection socket
         close(sock);
         connectFtpServer(portIssued);
-        FILE *fp = fopen("file.txt", "w");
+        FILE *fp = fopen(filename, "w");
         totalRecv(sock, 1, fp); // to write full data to file
+        fclose(fp);
         exit(0);
     }
     else
     {
-        myRecv(sock, recv_data); // receive 150 msg
+        oneRecv(sock, recv_data); // 150 msg - opening ascii mode
         if (strstr(recv_data, "150"))
         {
             wait();
-            myRecv(sock, recv_data); // receive 226 transfer complete msg
+            oneRecv(sock, recv_data); // 226 msg - transfer complete
         }
         else {
             // kill children process
@@ -331,8 +338,8 @@ int enterEpsvMode(int sock)
     char ftpType[6] = EPSV;
     char recv_data[SIZE] = "";
 
-    mySend(sock, ftpType);
-    myRecv(sock, recv_data); // 229 message
+    oneSend(sock, ftpType);
+    oneRecv(sock, recv_data); // 229 msg - entering epsv
 
     //Retrieve port number
     char *ret = strstr(recv_data, "|");
@@ -358,6 +365,7 @@ void printMenu()
     printf("6.Download File\n");
     printf("7.Quit\n");
     printf("Enter Optiooooooooooooooooon : ");
+    fflush(stdout);
 
 }
 
@@ -365,7 +373,7 @@ void ftpQuit(int sock)
 {
     char recv_data[SIZE] = "";
 
-    mySend(sock, QUIT);
-    myRecv(sock, recv_data); //must receive goodbye message
+    oneSend(sock, QUIT);
+    oneRecv(sock, recv_data); //must receive goodbye message
     exit(0);
 }

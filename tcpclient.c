@@ -28,6 +28,7 @@
 void oneSend(int sock, char data[SIZE]);
 void oneRecv(int sock, char recv_data[SIZE]);
 void totalRecv(int sock, int isWrite, FILE *fp);
+void totalSend(int sock, FILE *fp);
 
 void printMenu();
 void signIn(int sock);
@@ -74,9 +75,10 @@ void makeDecision(int *sock, char *userChoice)
     if (userChoiceInt < 1 || userChoiceInt > 8 || strlen(userChoice) > 1)
     {
         printf("\nPlease key in a valid decision\n");
+        return;
 
     }
-    else if(*sock == 0 && userChoiceInt != 1)
+    else if((*sock == 0 && userChoiceInt != 1) && userChoiceInt != 7)
     {
         printf("Please connect to a FTP server(choice 1) first\n");
         return;
@@ -158,7 +160,7 @@ void totalRecv(int sock, int isWrite, FILE *fp)
     {
         numBytes = recv(sock, buffer, SIZE-1, 0);
         //printf("RECEIVED NUMBER OF BYTES: %d \n", numBytes);
-        fflush(stdout);
+        //fflush(stdout);
         
         if (numBytes <= 0) // if no more data
         {
@@ -168,7 +170,7 @@ void totalRecv(int sock, int isWrite, FILE *fp)
         if (isWrite == 1)
         {
             // write to file
-            fwrite(buffer, 1, sizeof(buffer), fp);
+            fwrite(buffer, 1, numBytes, fp);
         }
 
         else
@@ -183,6 +185,7 @@ void totalRecv(int sock, int isWrite, FILE *fp)
 
 }
 
+// read from file and write to socket
 void totalSend(int sock, FILE *fp)
 {
     int numBytesRead = 0;
@@ -211,11 +214,12 @@ void totalSend(int sock, FILE *fp)
         }
         
         // Uncomment for debugging
-        // printf("%s", buffer);
-        // fflush(stdout);
+        //printf("READ NUM of BYTES: %d \n", numBytesRead);
+        //fflush(stdout);
 
-        numBytesSend = send(sock, buffer, sizeof(buffer), 0);
-        // printf("SEND NUMBER OF BYTES: %d \n", numBytesSend);
+        numBytesSend = send(sock, buffer, numBytesRead, 0);
+        //printf("SEND NUMBER OF BYTES: %d \n", numBytesSend);
+        //fflush(stdout);
         if (numBytesSend <= 0) // if no more data to be sent
         {
             break;
@@ -244,10 +248,14 @@ int connectFtpServer(int port)
         exit(1);
     }
 
+    char *host_addr = (*host).h_addr;
+    struct in_addr address = *(struct in_addr *)host_addr;
+    
     server_addr.sin_family = AF_INET;     
     server_addr.sin_port = htons(port);   
-    server_addr.sin_addr = *((struct in_addr *)host->h_addr);
-    bzero(&(server_addr.sin_zero),8); 
+    server_addr.sin_addr = address;
+    //server_addr.sin_addr = *((struct in_addr *)host->h_addr);
+    memset(&(server_addr.sin_zero), 0, 8); 
 
     if (connect(sock, (struct sockaddr *)&server_addr,
                 sizeof(struct sockaddr)) == -1) 
@@ -256,7 +264,7 @@ int connectFtpServer(int port)
         exit(1);
     }
 
-    printf("\nMini-FTP client: Currently connected to host-%s port-%d)\n",
+    printf("\nMini-FTP client: Currently connected to host-%s, port-%d\n",
             inet_ntoa(server_addr.sin_addr),ntohs(server_addr.sin_port));
     fflush(stdout);
 
@@ -275,7 +283,7 @@ void signIn(int sock)
     fflush(stdout);
 
     memset(buffer, 0, 512);
-    printf("Mini-FTP client: Enter your user: ");
+    printf("Mini-FTP client: Enter your username: ");
     fgets(buffer, 512, stdin);
     strcat(username, buffer);
     oneSend(sock, username);
@@ -397,18 +405,18 @@ void uploadFile(int sock)
         } 
     }
 
-    printf("End of uploading file\n");
+    printf("\nMini-FTP client: End of file upload\n");
     fflush(stdout);
 }
 
 void retrieveFile(int sock)
 {
-    //TODO could overflow, what if more tha 512
+    //TODO could overflow, what if more than 512
     char recv_data[SIZE]; 
     char userInput[SIZE] = RETRIEVE;
     char filename[512];
 
-    printf("Which file do you want to download? : ");
+    printf("Mini-FTP client: Which file do you want to download? : ");
     fflush(stdout);
     fgets(filename, SIZE, stdin);
     

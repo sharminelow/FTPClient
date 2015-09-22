@@ -19,7 +19,7 @@
 #define CWD "CWD "
 #define LIST "LIST\n"
 #define RETRIEVE "RETR "
-#define STORE "STOR\n"
+#define STORE "STOR "
 #define QUIT "QUIT\n"
 #define EPSV "EPSV\n"
 
@@ -32,6 +32,7 @@ void signIn(int sock);
 void listDirectory(int sock);
 void printWorkingDirectory(int sock);      
 void changeWorkingDirectory(int sock);
+void uploadFile(int sock);
 void retrieveFile(int sock);
 void ftpQuit(int sock);
 void makeDecision(int *sock, char *userChoice); 
@@ -68,7 +69,7 @@ void makeDecision(int *sock, char *userChoice)
     int userChoiceInt = atoi(userChoice);
     
     // Validify the user input
-    if (userChoiceInt < 1 || userChoiceInt > 7 || strlen(userChoice) > 1)
+    if (userChoiceInt < 1 || userChoiceInt > 8 || strlen(userChoice) > 1)
     {
         printf("\nPlease key in a valid decision\n");
 
@@ -94,6 +95,9 @@ void makeDecision(int *sock, char *userChoice)
             break;
         case 4:
             listDirectory(*sock); 
+            break;
+        case 5:
+            uploadFile(*sock); 
             break;
         case 6:
             retrieveFile(*sock);
@@ -170,6 +174,47 @@ void totalRecv(int sock, int isWrite, FILE *fp)
 
 }
 
+void totalSend(int sock, FILE *fp)
+{
+    int numBytesRead = 0;
+    int numBytesSend = 0;
+    char buffer[SIZE] = "";
+
+    // declare timeout constants
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec  = 900000; //0.9 seconds
+
+    if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+    {
+        perror("error in sockopt\n");
+    }
+
+    while (1)
+    {
+
+        // read and send
+        numBytesRead = fread(buffer, 1, sizeof(buffer), fp);
+        
+        if (numBytesRead <= 0) // if no more data to be read
+        {
+            break;
+        }
+        
+        printf("%s", buffer);
+        fflush(stdout);
+
+        numBytesSend = send(sock, buffer, sizeof(buffer), 0);
+        printf("SEND NUMBER OF BYTES: %d \n", numBytesSend);
+        if (numBytesSend <= 0) // if no more data to be sent
+        {
+            break;
+        }
+        memset(buffer, 0, SIZE);
+    }
+
+}
+
 // This functions connnect to a FTP server
 // Returns the socket descriptor
 int connectFtpServer(int port)
@@ -179,7 +224,8 @@ int connectFtpServer(int port)
     struct hostent *host;
     struct sockaddr_in server_addr;  
 
-    host = gethostbyname("ftp.ietf.org");
+    //host = gethostbyname("ftp.ietf.org");
+    host = gethostbyname("localhost");
 
     //create a Socket structure   - "Client Socket"
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
@@ -246,6 +292,7 @@ void changeWorkingDirectory(int sock)
     char buffer[512];
 
     printf("Which directory do you want to change to? : ");
+    fflush(stdout);
     fgets(buffer, SIZE, stdin);
     
     strcat(userInput, buffer);
@@ -288,6 +335,33 @@ void listDirectory(int sock)
     }
 }
 
+void uploadFile(int sock)
+{
+    char userInput[SIZE] = STORE;
+    char filename[512] = "";
+
+    printf("Which file do you want to upload? : ");
+    fflush(stdout);
+    fgets(filename, SIZE, stdin);
+
+    strcat(userInput, filename); // put testfile.txt
+    printf("%s\n", userInput);
+    fflush(stdout);
+
+    // replace filename last char with \0
+    filename[strlen(filename) - 1] = '\0';
+
+    // check if file exists locally TODO
+
+    // open file to read from
+    FILE *fp = fopen(filename, "r");
+    totalSend(sock, fp);
+    fclose(fp);
+
+    printf("End of uploading file\n");
+    fflush(stdout);
+}
+
 void retrieveFile(int sock)
 {
     //TODO could overflow, what if more tha 512
@@ -312,6 +386,8 @@ void retrieveFile(int sock)
         // close the main connection socket
         close(sock);
         connectFtpServer(portIssued);
+
+        // open file to write
         FILE *fp = fopen(filename, "w");
         totalRecv(sock, 1, fp); // to write full data to file
         fclose(fp);

@@ -15,6 +15,8 @@
 #define SIZE 1024
 #define FTP_PORT 21
 
+#define USER "USER "
+#define PASS "PASS "
 #define PWD "PWD\n"
 #define CWD "CWD "
 #define LIST "LIST\n"
@@ -135,6 +137,8 @@ void oneRecv(int sock, char recv_data[SIZE])
 }
 
 // totalRecv will print/write all data till EOF
+// isWrite option: 1 for writing to file, 0 for stdout
+// *fp is NULL if isWrite = 0
 void totalRecv(int sock, int isWrite, FILE *fp)
 {
     int numBytes;
@@ -160,11 +164,13 @@ void totalRecv(int sock, int isWrite, FILE *fp)
         {
             break;
         }
+
         if (isWrite == 1)
         {
             // write to file
             fwrite(buffer, 1, sizeof(buffer), fp);
         }
+
         else
         {
             // print to screen instead of writing to file
@@ -214,12 +220,13 @@ void totalSend(int sock, FILE *fp)
         {
             break;
         }
+
         memset(buffer, 0, SIZE);
     }
 
 }
 
-// This functions connnect to a FTP server
+// This function connect to a FTP server, given a port
 // Returns the socket descriptor
 int connectFtpServer(int port)
 {
@@ -231,7 +238,7 @@ int connectFtpServer(int port)
     //host = gethostbyname("ftp.ietf.org");
     host = gethostbyname("localhost");
 
-    //create a Socket structure   - "Client Socket"
+    //create a socket
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         perror("Socket");
         exit(1);
@@ -249,7 +256,7 @@ int connectFtpServer(int port)
         exit(1);
     }
 
-    printf("\nCurrently connected to (%s , %d)\n",
+    printf("\nMini-FTP client: Currently connected to host-%s port-%d)\n",
             inet_ntoa(server_addr.sin_addr),ntohs(server_addr.sin_port));
     fflush(stdout);
 
@@ -258,27 +265,28 @@ int connectFtpServer(int port)
 
 void signIn(int sock)
 {
-    char username[512] = "USER ";
-    char password[512] = "PASS ";
+    char username[512] = USER;
+    char password[512] = PASS;
     char buffer[512] = "";
     char recv_data[SIZE] = "";
     
-    oneRecv(sock, recv_data); //to receive connection success message
-    printf("starting connection to FTP server\n");
+    oneRecv(sock, recv_data); // 220 msg - connection success
+    printf("Mini-FTP client: Signing in to FTP server\n");
+    fflush(stdout);
 
     memset(buffer, 0, 512);
-    printf("Enter your user: ");
+    printf("Mini-FTP client: Enter your user: ");
     fgets(buffer, 512, stdin);
     strcat(username, buffer);
     oneSend(sock, username);
-    oneRecv(sock, recv_data);
+    oneRecv(sock, recv_data); // 331 msg - specify password
 
     memset(buffer, 0, 512);
-    printf("Enter your password: ");
+    printf("Mini-FTP client: Enter your password: ");
     fgets(buffer, 512, stdin);
     strcat(password, buffer);
     oneSend(sock, password);
-    oneRecv(sock, recv_data);
+    oneRecv(sock, recv_data); // 230 msg - Login successful
 }
 
 void printWorkingDirectory(int sock)
@@ -295,14 +303,14 @@ void changeWorkingDirectory(int sock)
     char userInput[SIZE] = CWD;
     char buffer[512];
 
-    printf("Which directory do you want to change to? : ");
+    printf("Mini-FTP client: Which directory do you want to change to? : ");
     fflush(stdout);
     fgets(buffer, SIZE, stdin);
     
     strcat(userInput, buffer);
-    printf("%s", userInput);
-    oneSend(sock, userInput);
-    oneRecv(sock, recv_data);
+    
+    oneSend(sock, userInput); // CWD <path>
+    oneRecv(sock, recv_data); // 250 Directory changed
     
 }
 
@@ -345,7 +353,7 @@ void uploadFile(int sock)
     char userInput[SIZE] = STORE;
     char filename[512] = "";
 
-    printf("Which file do you want to upload? : ");
+    printf("Mini-FTP client: Which file do you want to upload? : ");
     fflush(stdout);
     fgets(filename, SIZE, stdin);
 
@@ -374,6 +382,7 @@ void uploadFile(int sock)
         fclose(fp);
         exit(0);
     }
+
     else
     {
         oneRecv(sock, recv_data); // 150 msg - okay to send data
@@ -404,6 +413,7 @@ void retrieveFile(int sock)
     fgets(filename, SIZE, stdin);
     
     strcat(userInput, filename);
+    
     // replace filename last char with \0
     filename[strlen(filename) - 1] = '\0';
     
@@ -463,15 +473,14 @@ void printMenu()
     printf("\n*******************************************\n");
     printf("**************Mini-FTP client**************\n");
     printf("*******************************************\n");
-    printf("What do you feel like doing today?\n");
-    printf("1.Connect to FTP server\n");
-    printf("2.Print Working Directory\n");
-    printf("3.Change Working Directory\n");
-    printf("4.List all files\n");
-    printf("5.Upload File\n");
-    printf("6.Download File\n");
-    printf("7.Quit\n");
-    printf("Enter Optiooooooooooooooooon : ");
+    printf("   1. Connect to FTP server\n");
+    printf("   2. Print Working Directory\n");
+    printf("   3. Change Working Directory\n");
+    printf("   4. List all files\n");
+    printf("   5. Upload File\n");
+    printf("   6. Download File\n");
+    printf("   7. Quit\n");
+    printf("   Enter Option (1-7): ");
     fflush(stdout);
 
 }

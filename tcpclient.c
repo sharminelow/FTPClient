@@ -111,7 +111,6 @@ void makeDecision(int *sock, char *userChoice)
         case 7:
             ftpQuit(*sock);
             break;
-
     }
 
 }
@@ -192,6 +191,7 @@ void totalSend(int sock, FILE *fp)
 {
     int numBytesRead = 0;
     int numBytesSend = 0;
+    int totalBytesSend = 0;
     char buffer[SIZE] = "";
 
     // declare timeout constants
@@ -212,6 +212,8 @@ void totalSend(int sock, FILE *fp)
         
         if (numBytesRead <= 0) // if no more data to be read
         {
+            printf("\nMini-FTP client: The total number of bytes sent: %d\n", totalBytesSend);
+            fflush(stdout);
             break;
         }
         
@@ -220,6 +222,7 @@ void totalSend(int sock, FILE *fp)
         //fflush(stdout);
 
         numBytesSend = send(sock, buffer, numBytesRead, 0);
+        totalBytesSend += numBytesSend;
         //printf("SEND NUMBER OF BYTES: %d \n", numBytesSend);
         //fflush(stdout);
         if (numBytesSend <= 0) // if no more data to be sent
@@ -242,7 +245,8 @@ int connectFtpServer(int port)
     struct sockaddr_in server_addr;  
 
     if(hostname != NULL && hostname[0] == '\0'){
-        printf("Mini-FTP client: Which server do you want to connect to?: ");
+        printf("Mini-FTP client: Which FTP server do you want to connect to?: ");
+        fflush(stdout);
         fgets(hostname, SIZE, stdin);
         //remove newline character and replace with \0
         hostname[strlen(hostname) - 1] = '\0';
@@ -369,7 +373,7 @@ void uploadFile(int sock)
     char userInput[SIZE] = STORE;
     char filename[512] = "";
 
-    printf("Mini-FTP client: Which file do you want to upload? : ");
+    printf("\nMini-FTP client: Which file do you want to upload? : ");
     fflush(stdout);
     fgets(filename, SIZE, stdin);
 
@@ -379,7 +383,13 @@ void uploadFile(int sock)
     filename[strlen(filename) - 1] = '\0';
 
     // check if file exists locally TODO
-
+    if (access (filename, F_OK ) == -1 ) 
+    {
+        printf("\nMini-FTP client: This file do not exist locally\n");
+        fflush(stdout); 
+        return;
+    } 
+    
     // enter epsv
     int portIssued = enterEpsvMode(sock);
     oneSend(sock, userInput);

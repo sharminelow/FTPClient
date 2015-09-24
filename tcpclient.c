@@ -42,6 +42,8 @@ void makeDecision(int *sock, char *userChoice);
 int enterEpsvMode(int sock);
 int connectFtpServer(int port);
 
+// global variables
+char hostname[SIZE] = "";
 
 int main()
 
@@ -239,8 +241,14 @@ int connectFtpServer(int port)
     struct hostent *host;
     struct sockaddr_in server_addr;  
 
-    //host = gethostbyname("ftp.ietf.org");
-    host = gethostbyname("localhost");
+    if(hostname != NULL && hostname[0] == '\0'){
+        printf("Mini-FTP client: Which server do you want to connect to?: ");
+        fgets(hostname, SIZE, stdin);
+        //remove newline character and replace with \0
+        hostname[strlen(hostname) - 1] = '\0';
+    }
+
+    host = gethostbyname(hostname);
 
     //create a socket
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {

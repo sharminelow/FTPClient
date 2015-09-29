@@ -1,3 +1,11 @@
+/*
+ * CS3103 FTP client program
+ * This FTP client program can handle basic FTP commands
+ * PWD, CWD, LIST, RETR, STOR, QUIT, EPSV
+ * Author: Low Sharmine
+ * Date: 2015/09
+ */
+
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -74,7 +82,7 @@ void makeDecision(int *sock, char *userChoice)
     userChoice[strlen(userChoice) - 1] = '\0';
     int userChoiceInt = atoi(userChoice);
 
-    // Validify the user input
+    // Validate the user input
     if (userChoiceInt < 1 || userChoiceInt > 8 || strlen(userChoice) > 1)
     {
         printf("\nPlease key in a valid decision\n");
@@ -117,23 +125,21 @@ void makeDecision(int *sock, char *userChoice)
 
 }
 
+// Gets the server name and port that the user wants to connect
 void getHostAndPort()
 {
     char buffer[SIZE] = "";
 
-    //if(_hostname != NULL && _hostname[0] == '\0'){
     printf("\nMini-FTP client# Which FTP server do you want to connect to? : ");
     fflush(stdout);
     fgets(_hostname, SIZE, stdin);
-    //remove newline character and replace with \0
-    _hostname[strlen(_hostname) - 1] = '\0';
-    //}
-    
+
     printf("Mini-FTP client# Which port? : ");
     fflush(stdout);
     fgets(buffer, SIZE, stdin);
+
     //remove newline character and replace with \0
-    //_hostname[strlen(_hostname) - 1] = '\0';
+    _hostname[strlen(_hostname) - 1] = '\0';
     _port = atoi(buffer);
 }
 
@@ -178,6 +184,7 @@ int connectFtpServer(int port)
     return sock;
 }
 
+// Authentication 
 void signIn(int sock)
 {
     char username[512] = USER;
@@ -232,6 +239,7 @@ void listDirectory(int sock)
 {
     char recv_data[SIZE];
     int port_issued = enterEpsvMode(sock); 
+    int connectionSocket = 0;
 
     oneSend(sock, LIST);
 
@@ -242,7 +250,7 @@ void listDirectory(int sock)
     {
         // close the main connection socket
         close(sock);
-        int connectionSocket = connectFtpServer(port_issued);    
+        connectionSocket = connectFtpServer(port_issued);    
 
         //receive and print output
         totalRecv(connectionSocket, 0, NULL);
@@ -282,7 +290,7 @@ void uploadFile(int sock)
         printf("\nMini-FTP client# This file do not exist locally\n");
         fflush(stdout); 
         return;
-    } 
+    }
 
     // enter epsv
     int portIssued = enterEpsvMode(sock);
@@ -299,7 +307,14 @@ void uploadFile(int sock)
 
         // open file to read from
         FILE *fp = fopen(filename, "r");
+        if (fp == NULL) {
+            perror("File Error: ");
+            fflush(stdout);
+        } 
+        
+        // send the file contents
         totalSend(sock, fp);
+
         fclose(fp);
 
         // close connection socket
@@ -332,7 +347,7 @@ void retrieveFile(int sock)
     char userInput[SIZE] = RETRIEVE;
     char filename[512];
 
-    printf("Mini-FTP client# Which file do you want to download? : ");
+    printf("\nMini-FTP client# Which file do you want to download? : ");
     fflush(stdout);
     fgets(filename, SIZE, stdin);
 
@@ -346,16 +361,18 @@ void retrieveFile(int sock)
 
     int processId = fork();
 
-    if(processId == 0)
+    if(processId == 0) // child process
     {
         // close the main connection socket
         close(sock);
 
         int connectionSocket = connectFtpServer(portIssued);
 
-        // open file to write
+        // open file to write, new file is created if it does not exist
         FILE *fp = fopen(filename, "w");
-        totalRecv(sock, 1, fp); // to write full data to file
+
+        // write full data to file
+        totalRecv(sock, 1, fp); 
         fclose(fp);
 
         // close connection socket
@@ -363,7 +380,7 @@ void retrieveFile(int sock)
 
         exit(0);
     }
-    else
+    else // parent process
     {
         oneRecv(sock, recv_data); // 150 msg - opening ascii mode
         if (strstr(recv_data, "150"))
@@ -371,7 +388,7 @@ void retrieveFile(int sock)
             wait();
             oneRecv(sock, recv_data); // 226 msg - transfer complete
         }
-        else {
+        else { // if connection was not opened properly
             // kill children process
             kill(processId, SIGKILL);
         } 
@@ -420,6 +437,9 @@ void ftpQuit(int sock)
 
     oneSend(sock, QUIT);
     oneRecv(sock, recv_data); //must receive goodbye message
+
+    // close server socket
+    close(sock);
     exit(0);
 }
 
@@ -525,14 +545,9 @@ void totalSend(int sock, FILE *fp)
             break;
         }
 
-        // Uncomment for debugging
-        //printf("READ NUM of BYTES: %d \n", numBytesRead);
-        //fflush(stdout);
-
         numBytesSend = send(sock, buffer, numBytesRead, 0);
         totalBytesSend += numBytesSend;
-        //printf("SEND NUMBER OF BYTES: %d \n", numBytesSend);
-        //fflush(stdout);
+        
         if (numBytesSend <= 0) // if no more data to be sent
         {
             break;

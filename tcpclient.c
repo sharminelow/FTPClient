@@ -1,7 +1,7 @@
 /*
  * CS3103 FTP client program
  * This FTP client program can handle basic FTP commands
- * PWD, CWD, LIST, RETR, STOR, QUIT, EPSV
+ * PWD, CWD, LIST, RETR, STOR, QUIT
  * Author: Low Sharmine
  * Date: 2015/09
  */
@@ -77,8 +77,8 @@ int main()
 
 void makeDecision(int *sock, char *userChoice)
 {
-    //process userChoice to a number
     //remove newline character and replace with \0
+    //process userChoice to a number
     userChoice[strlen(userChoice) - 1] = '\0';
     int userChoiceInt = atoi(userChoice);
 
@@ -152,14 +152,15 @@ int connectFtpServer(int port)
     struct hostent *host;
     struct sockaddr_in server_addr;  
 
-    host = gethostbyname(_hostname);
-
     //create a socket
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         perror("Socket");
         exit(1);
     }
 
+    // build sockaddr structure for destination addr
+    host = gethostbyname(_hostname);
+    
     char *host_addr = (*host).h_addr;
     struct in_addr address = *(struct in_addr *)host_addr;
 
@@ -250,6 +251,8 @@ void listDirectory(int sock)
     {
         // close the main connection socket
         close(sock);
+        
+        // connect to ftp server on different port
         connectionSocket = connectFtpServer(port_issued);    
 
         //receive and print output
@@ -279,7 +282,7 @@ void uploadFile(int sock)
     fflush(stdout);
     fgets(filename, SIZE, stdin);
 
-    strcat(userInput, filename); // put testfile.txt
+    strcat(userInput, filename); // STOR filename
 
     // replace filename last char with \0
     filename[strlen(filename) - 1] = '\0';
@@ -298,16 +301,18 @@ void uploadFile(int sock)
 
     int processId = fork();
 
-    if(processId == 0)
+    if (processId == 0)
     {
         // close the main connection socket
         close(sock);
 
+        // connect to ftp server on different port
         int connectionSocket = connectFtpServer(portIssued);
 
         // open file to read from
         FILE *fp = fopen(filename, "r");
-        if (fp == NULL) {
+        if (fp == NULL) 
+        {
             perror("File Error: ");
             fflush(stdout);
         } 
@@ -315,11 +320,9 @@ void uploadFile(int sock)
         // send the file contents
         totalSend(sock, fp);
 
+        // close file, socket, terminate
         fclose(fp);
-
-        // close connection socket
         close(connectionSocket);
-
         exit(0);
     }
 
@@ -331,7 +334,9 @@ void uploadFile(int sock)
             wait();
             oneRecv(sock, recv_data); // 226 msg - transfer complete
         }
-        else {
+        
+        else 
+        {
             // kill children process
             kill(processId, SIGKILL);
         } 
@@ -366,20 +371,26 @@ void retrieveFile(int sock)
         // close the main connection socket
         close(sock);
 
+        // connect to ftp server on different port
         int connectionSocket = connectFtpServer(portIssued);
 
         // open file to write, new file is created if it does not exist
         FILE *fp = fopen(filename, "w");
+        if (fp == NULL) 
+        {
+            perror("File Error: ");
+            fflush(stdout);
+        } 
 
         // write full data to file
         totalRecv(sock, 1, fp); 
         fclose(fp);
 
-        // close connection socket
+        // close connection socket, terminate
         close(connectionSocket);
-
         exit(0);
     }
+
     else // parent process
     {
         oneRecv(sock, recv_data); // 150 msg - opening ascii mode
@@ -388,10 +399,14 @@ void retrieveFile(int sock)
             wait();
             oneRecv(sock, recv_data); // 226 msg - transfer complete
         }
-        else { // if connection was not opened properly
+        else { 
+            // if connection was not close properly
             // kill children process
             kill(processId, SIGKILL);
         } 
+        
+        printf("\nMini-FTP client# End of file download\n");
+        fflush(stdout);
     }
 
 }

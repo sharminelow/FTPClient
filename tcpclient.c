@@ -160,7 +160,13 @@ int connectFtpServer(int port)
 
     // build sockaddr structure for destination addr
     host = gethostbyname(_hostname);
-    
+    if (host == NULL) 
+    {
+        printf("Invalid host, please try again\n");    
+        fflush(stdout);
+        return 0;
+    }   
+
     char *host_addr = (*host).h_addr;
     struct in_addr address = *(struct in_addr *)host_addr;
 
@@ -192,6 +198,11 @@ void signIn(int sock)
     char password[512] = PASS;
     char buffer[512] = "";
     char recv_data[SIZE] = "";
+
+    if (sock == 0)
+    {
+        return;
+    }
 
     oneRecv(sock, recv_data); // 220 msg - connection success
     printf("Mini-FTP client# Signing in to FTP server\n");
@@ -333,6 +344,8 @@ void uploadFile(int sock)
         {
             wait();
             oneRecv(sock, recv_data); // 226 msg - transfer complete
+            printf("\nMini-FTP client# End of file upload\n");
+            fflush(stdout);
         }
         
         else 
@@ -341,9 +354,6 @@ void uploadFile(int sock)
             kill(processId, SIGKILL);
         } 
     }
-
-    printf("\nMini-FTP client# End of file upload\n");
-    fflush(stdout);
 }
 
 void retrieveFile(int sock)
@@ -398,15 +408,16 @@ void retrieveFile(int sock)
         {
             wait();
             oneRecv(sock, recv_data); // 226 msg - transfer complete
+            printf("\nMini-FTP client# End of file download\n");
+            fflush(stdout);
         }
         else { 
             // if connection was not close properly
             // kill children process
+            printf("\nMini-FTP client# Invalid file or connection errors\n");
+            fflush(stdout);
             kill(processId, SIGKILL);
         } 
-        
-        printf("\nMini-FTP client# End of file download\n");
-        fflush(stdout);
     }
 
 }
